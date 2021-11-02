@@ -1,0 +1,9 @@
+---
+title: "Part I: Data Exploration and Prediction"
+output: html_notebook
+---
+
+
+```{r}
+plot(cars)
+```
