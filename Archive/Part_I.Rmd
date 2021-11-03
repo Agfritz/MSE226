@@ -1,0 +1,40 @@
+---
+title: "Part I: Data Exploration and Prediction"
+output: html_notebook
+---
+
+First, we load packages:
+```{r}
+library(readxl)
+library(tidyverse)
+```
+
+Then, we load the data:
+```{r}
+drought_response <- read_excel("Data/uw_drought_response101921.xlsx")
+supplier_data <- read.csv("Data/uw_supplier_data0101921.csv")
+```
+
+Adjust the column names to match:
+```{r}
+colnames(drought_response) <- gsub(" ", "_", colnames(drought_response))
+colnames(drought_response) <- tolower(colnames(drought_response))
+drought_response$reporting_month <- as.factor(drought_response$reporting_month)
+drought_response <- drought_response %>% separate(reporting_month, c("year", "month", "day"), "-")
+supplier_data <- supplier_data %>% separate(reporting_month, c("year", "month", "day"), "-")
+
+```
+
+```{r}
+
+supplier_data_2021 <- supplier_data_2021 %>% subset()
+combined_data <- merge(drought_response, supplier_data, by=c("public_water_system_id", "reporting_month", "supplier_name", "county", "hydrologic_region", "climate_zone", "water_shortage_contingency_stage_invoked"), all.y = TRUE) 
+
+```
+
+column cleaning
+```{r}
+
+
+```
+

@@ -1,0 +1,46 @@
+---
+title: "Part I: Data Exploration and Prediction"
+output: html_notebook
+---
+
+First, we load packages:
+```{r}
+library(readxl)
+library(tidyverse)
+```
+
+Then, we load the data:
+```{r}
+school_demographics <- read_excel("Data/cupc1718-k12.xlsx", sheet = "School-Level CALPADS UPC Data", skip = 1)
+Hg_SchoolDistricts <- read.csv("Data/Hg_SchoolDistricts.csv")
+
+```
+
+Next, we clean the columns:
+```{r}
+colnames(school_demographics) <- gsub(" ", "_", colnames(school_demographics))
+colnames(Hg_SchoolDistricts) <- gsub(" ", "_", colnames(Hg_SchoolDistricts))
+
+colnames(school_demographics) <- tolower(colnames(school_demographics))
+colnames(Hg_SchoolDistricts) <- tolower(colnames(Hg_SchoolDistricts))
+
+```
+
+
+Then, we merge the datasets:
+```{r}
+combined_data <- merge(school_demographics, Hg_SchoolDistricts, by.x=c("school_name", "county_name"), by.y = c("school_name", "school_county")) 
+
+#select column names according to google doc
+#remove resampled observations
+#combine multiple samples by taking max samples when multiple samples taken at a school
+#count number of nas, evaluate removal on case-by-case basis
+
+```
+
+```{r}
+
+
+
+```
+
