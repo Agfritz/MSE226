@@ -1,0 +1,99 @@
+---
+title: "Part I: Data Exploration and Prediction"
+output: html_notebook
+---
+
+First, we load packages:
+```{r}
+library(readxl)
+library(tidyverse)
+library(dplyr)
+
+```
+
+Then, we load the data:
+```{r}
+school_demographics <- read_excel("Data/cupc1718-k12.xlsx", sheet = "School-Level CALPADS UPC Data", skip = 1)
+Hg_SchoolDistricts <- read.csv("Data/Hg_SchoolDistricts.csv")
+
+```
+
+Next, we clean the columns:
+```{r}
+colnames(school_demographics) <- gsub(" ", "_", colnames(school_demographics))
+colnames(Hg_SchoolDistricts) <- gsub(" ", "_", colnames(Hg_SchoolDistricts))
+
+colnames(school_demographics) <- tolower(colnames(school_demographics))
+colnames(Hg_SchoolDistricts) <- tolower(colnames(Hg_SchoolDistricts))
+
+```
+
+
+Then, we merge the datasets:
+```{r}
+combined_data <- merge(school_demographics, Hg_SchoolDistricts, by.x=c("school_name", "county_name"), by.y = c("school_name", "school_county")) 
+
+```
+
+Next, we clean the dataset
+```{r}
+#select column names according to google doc
+
+drops <- c("academic_year", "county_code", "district_code", "school_code", "charter_number", "IRC", "low_grade", "high_grade", "unduplicated", "calpads_fall_1", "pscode", "district", "school_address", "school_site_name", "xmod", "rpt_unit", "water_system_county", "samp_date", "sample_loaddate", "samp_loaded", "samp_time", "pws_id")
+
+
+combined_data_clean <- combined_data[ , !(names(combined_data) %in% drops)]
+
+#remove resampled observations
+combined_data_clean$ale_follow_up_action <- combined_data_clean$ale_follow_up_action %>% replace_na('NA')
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled"),]
+
+#combine multiple samples by taking max samples when multiple samples taken at a school
+combined_data_clean_grouped <- combined_data_clean %>% 
+  group_by(school_name, county_name) %>% 
+  mutate(result.max= max(result))
+
+combined_data_clean_grouped <-subset(combined_data_clean_grouped, result==result.max)
+combined_data_clean_grouped <- unique(combined_data_clean_grouped)
+
+#convert exceedence to binary variable (0,1)
+
+
+```
+
+
+Qualitatively establish the difference between public and charter school
+Look into NSLP provision status
+
+Charter school funding type-> drop row if funding type na, but is charter school
+
+total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type -> dropnas
+
+water system name, sample date, follow up status and action -> keep nas
+
+-set aside test and training data (80-20, do CV, we dont have infinite data)
+
+
+Things to viz:
+-barplots to describe the population
+-look at barcharts
+-grouped histogram of results for factors
+-scatterplot results for continuous
+-Density plots for continuous
+-Correlation matrix continuous variables
+
+-Prediction model
+  -interpretable model
+    -dont use knn bc not interpretable
+    -use lasso, ridge, regular OLS
+  -acceptable performance: RMSE
+    -baseline "naive" estimators: 
+      - prediction: mean result
+
+-Classification model
+    -logistic regression
+    -dont use knn bc not interpretable
+  -objective: prioritize low false negatives (check confusion matrix for appropriate metric)
+  -baseline: "No exceedance"
+
+-Find bias/variance trade-off plot for model selection
