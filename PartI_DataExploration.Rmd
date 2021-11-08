@@ -8,6 +8,7 @@ First, we load packages:
 library(readxl)
 library(tidyverse)
 library(dplyr)
+library(ggplot2)
 
 ```
 
@@ -39,14 +40,19 @@ Next, we clean the dataset
 ```{r}
 #select column names according to google doc
 
-drops <- c("academic_year", "county_code", "district_code", "school_code", "charter_number", "IRC", "low_grade", "high_grade", "unduplicated", "calpads_fall_1", "pscode", "district", "school_address", "school_site_name", "xmod", "rpt_unit", "water_system_county", "samp_date", "sample_loaddate", "samp_loaded", "samp_time", "pws_id")
-
+drops <- c("academic_year", "county_code", "district_code", "school_code", "charter_number", "irc", "low_grade", "high_grade", "unduplicated", "calpads_fall_1", "pscode", "district", "school_address", "school_site_name", "xmod", "rpt_unit", "water_system_county", "samp_date", "sample_loaddate", "samp_loaded", "samp_time", "pws_id")
 
 combined_data_clean <- combined_data[ , !(names(combined_data) %in% drops)]
 
 #remove resampled observations
 combined_data_clean$ale_follow_up_action <- combined_data_clean$ale_follow_up_action %>% replace_na('NA')
 combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled"),]
+
+#remove charter schools with funding type na
+combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_\r\nschool_\r\n(y/n)" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
+
+#remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
+combined_data_clean %>% drop_na("total_\r\nenrollment", "free_&\r\nreduced\r\nmeal\r\nprogram", "homeless", "migrant\r\nprogram", "direct_certification", "unduplicated\r\nfrpm_eligible_\r\ncount", "english_\r\nlearner_\r\n(el)" , "result", "action_level_exceedance", "school_type.y")
 
 #combine multiple samples by taking max samples when multiple samples taken at a school
 combined_data_clean_grouped <- combined_data_clean %>% 
@@ -57,10 +63,33 @@ combined_data_clean_grouped <-subset(combined_data_clean_grouped, result==result
 combined_data_clean_grouped <- unique(combined_data_clean_grouped)
 
 #convert exceedence to binary variable (0,1)
+combined_data_clean_grouped$action_level_exceedance <- ifelse(combined_data_clean_grouped$action_level_exceedance=="Yes",1,0)
 
+#convert charter to binary variable (0,1)
+combined_data_clean_grouped$"charter_\r\nschool_\r\n(y/n)" <- ifelse(combined_data_clean_grouped$"charter_\r\nschool_\r\n(y/n)"=="Yes",1,0)
+```
+Next we allocate our training and test sets
+```{r}
+#calculate the number of observations that should be in our training set
+size_training = round(.8*nrow(combined_data_clean_grouped), digits = 0)
 
+#allocate training and test data
+in.train = sample(nrow(combined_data_clean_grouped), size = size_training)
+train = combined_data_clean_grouped[in.train, ]
+test = combined_data_clean_grouped[-in.train, ]
+
+print(colnames(combined_data_clean_grouped))
 ```
 
+Next we start visualizing our training data
+```{r}
+ggplot(data = train) + geom_bar(mapping = aes(x=county_name)) + theme(axis.text.x = element_text(angle = 90))
+ggplot(data = train) + geom_bar(mapping = aes(x=school_type.x)) + theme(axis.text.x = element_text(angle = 90)) #seeing the number of schools that are categorized weirdly, we may want to combine
+ggplot(data = train) + geom_bar(mapping = aes(x=charter_funding_type)) + theme(axis.text.x = element_text(angle = 90))
+ggplot(data = train) + geom_bar(mapping = aes(x=ale_follow_up_status)) + theme(axis.text.x = element_text(angle = 90)) #doesn't look like we have a ton of data on this...
+ggplot(data = train) + geom_bar(mapping = aes(x=result.max)) + theme(axis.text.x = element_text(angle = 90))
+
+```
 
 Qualitatively establish the difference between public and charter school
 Look into NSLP provision status
