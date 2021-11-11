@@ -8,6 +8,8 @@ First, we load packages:
 library(readxl)
 library(tidyverse)
 library(dplyr)
+library(ggplot2)
+library("GGally")
 
 ```
 
@@ -26,6 +28,8 @@ colnames(Hg_SchoolDistricts) <- gsub(" ", "_", colnames(Hg_SchoolDistricts))
 colnames(school_demographics) <- tolower(colnames(school_demographics))
 colnames(Hg_SchoolDistricts) <- tolower(colnames(Hg_SchoolDistricts))
 
+colnames(school_demographics) <- gsub("\r\n", "", colnames(school_demographics))
+colnames(Hg_SchoolDistricts) <- gsub("\r\n", "", colnames(Hg_SchoolDistricts))
 ```
 
 
@@ -39,14 +43,19 @@ Next, we clean the dataset
 ```{r}
 #select column names according to google doc
 
-drops <- c("academic_year", "county_code", "district_code", "school_code", "charter_number", "IRC", "low_grade", "high_grade", "unduplicated", "calpads_fall_1", "pscode", "district", "school_address", "school_site_name", "xmod", "rpt_unit", "water_system_county", "samp_date", "sample_loaddate", "samp_loaded", "samp_time", "pws_id")
-
+drops <- c("academic_year", "county_code", "district_code", "school_code", "charter_number", "irc", "low_grade", "high_grade", "unduplicated", "calpads_fall_1", "pscode", "district", "school_address", "school_site_name", "xmod", "rpt_unit", "water_system_county", "samp_date", "sample_loaddate", "samp_loaded", "samp_time", "pws_id")
 
 combined_data_clean <- combined_data[ , !(names(combined_data) %in% drops)]
 
 #remove resampled observations
 combined_data_clean$ale_follow_up_action <- combined_data_clean$ale_follow_up_action %>% replace_na('NA')
 combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled"),]
+
+#remove charter schools with funding type na
+combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school_(y/n)" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
+
+#remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
+combined_data_clean %>% drop_na("total_enrollment", "free_&reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner_(el)" , "result", "action_level_exceedance", "school_type.y")
 
 #combine multiple samples by taking max samples when multiple samples taken at a school
 combined_data_clean_grouped <- combined_data_clean %>% 
@@ -57,30 +66,94 @@ combined_data_clean_grouped <-subset(combined_data_clean_grouped, result==result
 combined_data_clean_grouped <- unique(combined_data_clean_grouped)
 
 #convert exceedence to binary variable (0,1)
+combined_data_clean_grouped$action_level_exceedance <- ifelse(combined_data_clean_grouped$action_level_exceedance=="Yes",1,0)
 
-
+#convert charter to binary variable (0,1)
+combined_data_clean_grouped$"charter_school_(y/n)" <- ifelse(combined_data_clean_grouped$"charter_school_(y/n)"=="Yes",1,0)
 ```
-
 
 Qualitatively establish the difference between public and charter school
 Look into NSLP provision status
 
-Charter school funding type-> drop row if funding type na, but is charter school
+Charter school funding type-> drop row if funding type na, but is charter school (no nas for charter schools, no action needed)
 
 total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type -> dropnas
 
 water system name, sample date, follow up status and action -> keep nas
+```{r}
+combined_data_clean_grouped = combined_data_clean_grouped[,!(names(combined_data_clean_grouped) =='result')]
+combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>% 
+ drop_na(total_enrollment)  %>%
+ drop_na(homeless)  %>%
+ drop_na(migrantprogram)  %>%
+ drop_na(direct_certification)  %>%
+ drop_na(unduplicatedfrpm_eligible_count)  %>%
+ drop_na(`english_learner_(el)`)  %>%
+ drop_na(result.max)  %>%
+ drop_na(action_level_exceedance)  %>%
+ drop_na(school_type.y)
 
+```
+
+need to make ratios instead of numbers
+
+```{r}
+print(colnames(combined_data_clean_grouped_rmna))
+combined_data_clean_grouped_rmna$`free_&reducedmealprogram` =  combined_data_clean_grouped_rmna$`free_&reducedmealprogram`/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$foster =  combined_data_clean_grouped_rmna$foster/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$homeless =  combined_data_clean_grouped_rmna$homeless/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$migrantprogram =  combined_data_clean_grouped_rmna$migrantprogram/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$direct_certification =  combined_data_clean_grouped_rmna$direct_certification/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count=  combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$`english_learner_(el)` =  combined_data_clean_grouped_rmna$`english_learner_(el)` /combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$`calpads_unduplicated_pupil_count(upc)` =  combined_data_clean_grouped_rmna$`calpads_unduplicated_pupil_count(upc)` /combined_data_clean_grouped_rmna$total_enrollment
+
+```
+
+Next we allocate our training and test sets
 -set aside test and training data (80-20, do CV, we dont have infinite data)
+```{r}
+#calculate the number of observations that should be in our training set
+size_training = round(.8*nrow(combined_data_clean_grouped_rmna), digits = 0)
+
+#allocate training and test data
+in.train = sample(nrow(combined_data_clean_grouped_rmna), size = size_training)
+train = combined_data_clean_grouped_rmna[in.train, ]
+test = combined_data_clean_grouped_rmna[-in.train, ]
+
+```
+
+Next we start visualizing our training data
+```{r}
+ggplot(data = train) + geom_bar(mapping = aes(x=county_name)) + theme(axis.text.x = element_text(angle = 90))
+ggplot(data = train) + geom_bar(mapping = aes(x=school_type.x)) + theme(axis.text.x = element_text(angle = 90)) #seeing the number of schools that are categorized weirdly, we may want to combine #I agree we can combine some of these categories 
+ggplot(data = train) + geom_bar(mapping = aes(x=school_type.y)) + theme(axis.text.x = element_text(angle = 90)) 
+#I think we can remove school type y
+ggplot(data = train) + geom_bar(mapping = aes(x=charter_funding_type)) + theme(axis.text.x = element_text(angle = 90))
+ggplot(data = train) + geom_bar(mapping = aes(x=ale_follow_up_status)) + theme(axis.text.x = element_text(angle = 90)) #doesn't look like we have a ton of data on this...
+#This is only if there was an exceedence! so i think that is why there are so few 
+
+```
+
 
 
 Things to viz:
 -barplots to describe the population
--look at barcharts
 -grouped histogram of results for factors
 -scatterplot results for continuous
 -Density plots for continuous
 -Correlation matrix continuous variables
+```{r}
+train.num <- train %>% select_if(is.numeric)
+ggpairs(train.num[,c(4:14)], lower = list(continuous = wrap("smooth", alpha = 0.3, size=0.1)))
+```
 
 -Prediction model
   -interpretable model
