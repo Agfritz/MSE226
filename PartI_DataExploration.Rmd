@@ -27,6 +27,8 @@ colnames(Hg_SchoolDistricts) <- gsub(" ", "_", colnames(Hg_SchoolDistricts))
 colnames(school_demographics) <- tolower(colnames(school_demographics))
 colnames(Hg_SchoolDistricts) <- tolower(colnames(Hg_SchoolDistricts))
 
+colnames(school_demographics) <- gsub("\r\n", "", colnames(school_demographics))
+colnames(Hg_SchoolDistricts) <- gsub("\r\n", "", colnames(Hg_SchoolDistricts))
 ```
 
 
@@ -49,10 +51,10 @@ combined_data_clean$ale_follow_up_action <- combined_data_clean$ale_follow_up_ac
 combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled"),]
 
 #remove charter schools with funding type na
-combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_\r\nschool_\r\n(y/n)" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school_(y/n)" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
 
 #remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
-combined_data_clean %>% drop_na("total_\r\nenrollment", "free_&\r\nreduced\r\nmeal\r\nprogram", "homeless", "migrant\r\nprogram", "direct_certification", "unduplicated\r\nfrpm_eligible_\r\ncount", "english_\r\nlearner_\r\n(el)" , "result", "action_level_exceedance", "school_type.y")
+combined_data_clean %>% drop_na("total_enrollment", "free_&reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner_(el)" , "result", "action_level_exceedance", "school_type.y")
 
 #combine multiple samples by taking max samples when multiple samples taken at a school
 combined_data_clean_grouped <- combined_data_clean %>% 
@@ -66,9 +68,11 @@ combined_data_clean_grouped <- unique(combined_data_clean_grouped)
 combined_data_clean_grouped$action_level_exceedance <- ifelse(combined_data_clean_grouped$action_level_exceedance=="Yes",1,0)
 
 #convert charter to binary variable (0,1)
-combined_data_clean_grouped$"charter_\r\nschool_\r\n(y/n)" <- ifelse(combined_data_clean_grouped$"charter_\r\nschool_\r\n(y/n)"=="Yes",1,0)
+combined_data_clean_grouped$"charter_school_(y/n)" <- ifelse(combined_data_clean_grouped$"charter_school_(y/n)"=="Yes",1,0)
 ```
+
 Next we allocate our training and test sets
+-set aside test and training data (80-20, do CV, we dont have infinite data)
 ```{r}
 #calculate the number of observations that should be in our training set
 size_training = round(.8*nrow(combined_data_clean_grouped), digits = 0)
@@ -78,7 +82,6 @@ in.train = sample(nrow(combined_data_clean_grouped), size = size_training)
 train = combined_data_clean_grouped[in.train, ]
 test = combined_data_clean_grouped[-in.train, ]
 
-print(colnames(combined_data_clean_grouped))
 ```
 
 Next we start visualizing our training data
@@ -99,8 +102,10 @@ Charter school funding type-> drop row if funding type na, but is charter school
 total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type -> dropnas
 
 water system name, sample date, follow up status and action -> keep nas
+```{r}
 
--set aside test and training data (80-20, do CV, we dont have infinite data)
+```
+
 
 
 Things to viz:
@@ -110,6 +115,9 @@ Things to viz:
 -scatterplot results for continuous
 -Density plots for continuous
 -Correlation matrix continuous variables
+```{r}
+
+```
 
 -Prediction model
   -interpretable model
