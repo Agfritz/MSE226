@@ -97,6 +97,26 @@ combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>%
 
 need to make ratios instead of numbers
 
+```{r}
+print(colnames(combined_data_clean_grouped_rmna))
+combined_data_clean_grouped_rmna$`free_&reducedmealprogram` =  combined_data_clean_grouped_rmna$`free_&reducedmealprogram`/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$foster =  combined_data_clean_grouped_rmna$foster/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$homeless =  combined_data_clean_grouped_rmna$homeless/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$migrantprogram =  combined_data_clean_grouped_rmna$migrantprogram/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$direct_certification =  combined_data_clean_grouped_rmna$direct_certification/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count=  combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$`english_learner_(el)` =  combined_data_clean_grouped_rmna$`english_learner_(el)` /combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$`calpads_unduplicated_pupil_count(upc)` =  combined_data_clean_grouped_rmna$`calpads_unduplicated_pupil_count(upc)` /combined_data_clean_grouped_rmna$total_enrollment
+
+```
+
 Next we allocate our training and test sets
 -set aside test and training data (80-20, do CV, we dont have infinite data)
 ```{r}
