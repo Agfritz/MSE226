@@ -10,6 +10,7 @@ library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library("GGally")
+library(corrplot)
 
 ```
 
@@ -30,6 +31,16 @@ colnames(Hg_SchoolDistricts) <- tolower(colnames(Hg_SchoolDistricts))
 
 colnames(school_demographics) <- gsub("\r\n", "", colnames(school_demographics))
 colnames(Hg_SchoolDistricts) <- gsub("\r\n", "", colnames(Hg_SchoolDistricts))
+
+colnames(school_demographics) <- gsub("&", "", colnames(school_demographics))
+colnames(Hg_SchoolDistricts) <- gsub("&", "", colnames(Hg_SchoolDistricts))
+
+colnames(school_demographics) <- gsub("_(y/n)", "", colnames(school_demographics), fixed=TRUE)
+
+colnames(school_demographics) <- gsub("_(el)", "", colnames(school_demographics), fixed=TRUE)
+
+colnames(school_demographics) <- gsub("_(upc)", "", colnames(school_demographics), fixed=TRUE)
+
 ```
 
 
@@ -52,10 +63,10 @@ combined_data_clean$ale_follow_up_action <- combined_data_clean$ale_follow_up_ac
 combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled"),]
 
 #remove charter schools with funding type na
-combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school_(y/n)" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
 
 #remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
-combined_data_clean %>% drop_na("total_enrollment", "free_&reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner_(el)" , "result", "action_level_exceedance", "school_type.y")
+combined_data_clean %>% drop_na("total_enrollment", "free_reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner_el" , "result", "action_level_exceedance", "school_type.y")
 
 #combine multiple samples by taking max samples when multiple samples taken at a school
 combined_data_clean_grouped <- combined_data_clean %>% 
@@ -68,8 +79,6 @@ combined_data_clean_grouped <- unique(combined_data_clean_grouped)
 #convert exceedence to binary variable (0,1)
 combined_data_clean_grouped$action_level_exceedance <- ifelse(combined_data_clean_grouped$action_level_exceedance=="Yes",1,0)
 
-#convert charter to binary variable (0,1)
-combined_data_clean_grouped$"charter_school_(y/n)" <- ifelse(combined_data_clean_grouped$"charter_school_(y/n)"=="Yes",1,0)
 ```
 
 Qualitatively establish the difference between public and charter school
@@ -88,7 +97,7 @@ combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>%
  drop_na(migrantprogram)  %>%
  drop_na(direct_certification)  %>%
  drop_na(unduplicatedfrpm_eligible_count)  %>%
- drop_na(`english_learner_(el)`)  %>%
+ drop_na(`english_learner_el`)  %>%
  drop_na(result.max)  %>%
  drop_na(action_level_exceedance)  %>%
  drop_na(school_type.y)
@@ -99,7 +108,7 @@ need to make ratios instead of numbers
 
 ```{r}
 print(colnames(combined_data_clean_grouped_rmna))
-combined_data_clean_grouped_rmna$`free_&reducedmealprogram` =  combined_data_clean_grouped_rmna$`free_&reducedmealprogram`/combined_data_clean_grouped_rmna$total_enrollment
+combined_data_clean_grouped_rmna$free_reducedmealprogram =  combined_data_clean_grouped_rmna$free_reducedmealprogram/combined_data_clean_grouped_rmna$total_enrollment
 
 combined_data_clean_grouped_rmna$foster =  combined_data_clean_grouped_rmna$foster/combined_data_clean_grouped_rmna$total_enrollment
 
@@ -111,9 +120,9 @@ combined_data_clean_grouped_rmna$direct_certification =  combined_data_clean_gro
 
 combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count=  combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count/combined_data_clean_grouped_rmna$total_enrollment
 
-combined_data_clean_grouped_rmna$`english_learner_(el)` =  combined_data_clean_grouped_rmna$`english_learner_(el)` /combined_data_clean_grouped_rmna$total_enrollment
+combined_data_clean_grouped_rmna$english_learner_el =  combined_data_clean_grouped_rmna$english_learner_el /combined_data_clean_grouped_rmna$total_enrollment
 
-combined_data_clean_grouped_rmna$`calpads_unduplicated_pupil_count(upc)` =  combined_data_clean_grouped_rmna$`calpads_unduplicated_pupil_count(upc)` /combined_data_clean_grouped_rmna$total_enrollment
+combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_countupc =  combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_countupc /combined_data_clean_grouped_rmna$total_enrollment
 
 ```
 
@@ -145,9 +154,7 @@ ggplot(data = train) + geom_bar(mapping = aes(x=ale_follow_up_status)) + theme(a
 
 
 Things to viz:
--barplots to describe the population
--grouped histogram of results for factors
--scatterplot results for continuous
+
 -Density plots for continuous
 ```{r}
 cont.colnames <- train %>% select_if(is.numeric) %>% colnames()
@@ -155,7 +162,7 @@ fact.colnames <- train %>% select_if(negate(is.numeric)) %>% colnames()
 print(cont.colnames)
 
 ggplot(data=train)+
-  geom_density(aes(`free_&reducedmealprogram`))
+  geom_density(aes(free_reducedmealprogram))
 
 ggplot(data=train)+
   geom_density(aes(foster))
@@ -173,25 +180,31 @@ ggplot(data=train)+
   geom_density(aes(unduplicatedfrpm_eligible_count))
 
 ggplot(data=train)+
-  geom_density(aes(`english_learner_(el)`))
+  geom_density(aes(english_learner_el))
 
 ggplot(data=train)+
-  geom_density(aes(`calpads_unduplicated_pupil_count(upc)`))
+  geom_density(aes(calpads_unduplicated_pupil_countupc))
 
 ggplot(data=train)+
   geom_density(aes(result.max))
 
+ggplot(data=train)+
+  geom_density(aes(log(result.max)))
 ```
 
+-barplots to describe the population
+
 ```{r}
-ggplot(data=train)+
-  geom_bar(aes(district_type))
+print(cont.colnames)
 
 ggplot(data=train)+
-  geom_bar(aes(school_type.x))
+  geom_bar(aes(district_type))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 ggplot(data=train)+
-  geom_bar(aes(educational_option_type))
+  geom_bar(aes(school_type.x))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+ggplot(data=train)+
+  geom_bar(aes(educational_option_type))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 ggplot(data=train)+
   geom_bar(aes(nslp_provision_status))
@@ -202,15 +215,64 @@ ggplot(data=train)+
 ggplot(data=train)+
   geom_bar(aes(school_type.y))
 
+ggplot(data=train)+
+  geom_bar(aes(`action_level_exceedance`))
+
+ggplot(data=train)+
+  geom_bar(aes(charter_school))
+
+```
+grouped histogram of results for factors
+```{r}
+ggplot(data=train)+
+  geom_violin(aes(x=district_type, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+ggplot(data=train)+
+  geom_violin(aes(x=school_type.x, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+  
+ggplot(data=train)+
+  geom_violin(aes(x=educational_option_type, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+ggplot(data=train)+
+  geom_violin(aes(x=nslp_provision_status, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+ggplot(data=train)+
+  geom_violin(aes(x=charter_funding_type, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+
+ggplot(data=train)+
+  geom_violin(aes(x=`charter_school`, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+
 ```
 
 
--Correlation matrix continuous variables
+-scatterplot/ Correlation matrix continuous variables
+
 ```{r}
 train.num <- train %>% select_if(is.numeric)
 ggpairs(train.num[,c(4:14)], lower = list(continuous = wrap("smooth", alpha = 0.3, size=0.1)))
+
+M = cor(train.num[,c(4:12)])
+corrplot(M)+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+```
+-covariates that seem important:
+  -undupliccated frpm
+  -foster
+  -homeless
+  -migrant program
+  -english_learner_(el)
+  -charter school
+  -nslp_provision_status
+  -school.type.x
+  
+```{r}
+
+
 ```
 
+  
 -Prediction model
   -interpretable model
     -dont use knn bc not interpretable
@@ -218,6 +280,12 @@ ggpairs(train.num[,c(4:14)], lower = list(continuous = wrap("smooth", alpha = 0.
   -acceptable performance: RMSE
     -baseline "naive" estimators: 
       - prediction: mean result
+
+```{r}
+
+
+```
+
 
 -Classification model
     -logistic regression
