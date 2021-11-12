@@ -11,7 +11,8 @@ library(dplyr)
 library(ggplot2)
 library("GGally")
 library(corrplot)
-
+library(cvTools)
+library(glmnet)
 ```
 
 Then, we load the data:
@@ -41,6 +42,8 @@ colnames(school_demographics) <- gsub("_(el)", "", colnames(school_demographics)
 
 colnames(school_demographics) <- gsub("_(upc)", "", colnames(school_demographics), fixed=TRUE)
 
+colnames(school_demographics) <- gsub("(upc)", "", colnames(school_demographics), fixed=TRUE)
+
 ```
 
 
@@ -66,7 +69,7 @@ combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_a
 combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
 
 #remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
-combined_data_clean %>% drop_na("total_enrollment", "free_reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner_el" , "result", "action_level_exceedance", "school_type.y")
+combined_data_clean %>% drop_na("total_enrollment", "free_reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner" , "result", "action_level_exceedance", "school_type.y")
 
 #combine multiple samples by taking max samples when multiple samples taken at a school
 combined_data_clean_grouped <- combined_data_clean %>% 
@@ -97,7 +100,7 @@ combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>%
  drop_na(migrantprogram)  %>%
  drop_na(direct_certification)  %>%
  drop_na(unduplicatedfrpm_eligible_count)  %>%
- drop_na(`english_learner_el`)  %>%
+ drop_na(english_learner)  %>%
  drop_na(result.max)  %>%
  drop_na(action_level_exceedance)  %>%
  drop_na(school_type.y)
@@ -120,10 +123,12 @@ combined_data_clean_grouped_rmna$direct_certification =  combined_data_clean_gro
 
 combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count=  combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count/combined_data_clean_grouped_rmna$total_enrollment
 
-combined_data_clean_grouped_rmna$english_learner_el =  combined_data_clean_grouped_rmna$english_learner_el /combined_data_clean_grouped_rmna$total_enrollment
+combined_data_clean_grouped_rmna$english_learner =  combined_data_clean_grouped_rmna$english_learner /combined_data_clean_grouped_rmna$total_enrollment
 
-combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_countupc =  combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_countupc /combined_data_clean_grouped_rmna$total_enrollment
+combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_count =  combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_count /combined_data_clean_grouped_rmna$total_enrollment
 
+combined_data_clean_grouped_rmna <- combined_data_clean_grouped_rmna %>%
+  rename(school_type = school_type.x)
 ```
 
 Next we allocate our training and test sets
@@ -142,7 +147,7 @@ test = combined_data_clean_grouped_rmna[-in.train, ]
 Next we start visualizing our training data
 ```{r}
 ggplot(data = train) + geom_bar(mapping = aes(x=county_name)) + theme(axis.text.x = element_text(angle = 90))
-ggplot(data = train) + geom_bar(mapping = aes(x=school_type.x)) + theme(axis.text.x = element_text(angle = 90)) #seeing the number of schools that are categorized weirdly, we may want to combine #I agree we can combine some of these categories 
+ggplot(data = train) + geom_bar(mapping = aes(x=school_type)) + theme(axis.text.x = element_text(angle = 90)) #seeing the number of schools that are categorized weirdly, we may want to combine #I agree we can combine some of these categories 
 ggplot(data = train) + geom_bar(mapping = aes(x=school_type.y)) + theme(axis.text.x = element_text(angle = 90)) 
 #I think we can remove school type y
 ggplot(data = train) + geom_bar(mapping = aes(x=charter_funding_type)) + theme(axis.text.x = element_text(angle = 90))
@@ -180,10 +185,10 @@ ggplot(data=train)+
   geom_density(aes(unduplicatedfrpm_eligible_count))
 
 ggplot(data=train)+
-  geom_density(aes(english_learner_el))
+  geom_density(aes(english_learner))
 
 ggplot(data=train)+
-  geom_density(aes(calpads_unduplicated_pupil_countupc))
+  geom_density(aes(calpads_unduplicated_pupil_count))
 
 ggplot(data=train)+
   geom_density(aes(result.max))
@@ -201,7 +206,7 @@ ggplot(data=train)+
   geom_bar(aes(district_type))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 ggplot(data=train)+
-  geom_bar(aes(school_type.x))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+  geom_bar(aes(school_type))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 ggplot(data=train)+
   geom_bar(aes(educational_option_type))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
@@ -216,7 +221,7 @@ ggplot(data=train)+
   geom_bar(aes(school_type.y))
 
 ggplot(data=train)+
-  geom_bar(aes(`action_level_exceedance`))
+  geom_bar(aes(action_level_exceedance))
 
 ggplot(data=train)+
   geom_bar(aes(charter_school))
@@ -228,7 +233,7 @@ ggplot(data=train)+
   geom_violin(aes(x=district_type, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 ggplot(data=train)+
-  geom_violin(aes(x=school_type.x, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+  geom_violin(aes(x=school_type, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
   
 ggplot(data=train)+
   geom_violin(aes(x=educational_option_type, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
@@ -241,7 +246,7 @@ ggplot(data=train)+
 
 
 ggplot(data=train)+
-  geom_violin(aes(x=`charter_school`, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+  geom_violin(aes(x=charter_school, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 
 ```
@@ -251,9 +256,9 @@ ggplot(data=train)+
 
 ```{r}
 train.num <- train %>% select_if(is.numeric)
-ggpairs(train.num[,c(4:14)], lower = list(continuous = wrap("smooth", alpha = 0.3, size=0.1)))
+ggpairs(train.num[,c(3:13)], lower = list(continuous = wrap("smooth", alpha = 0.3, size=0.1)))
 
-M = cor(train.num[,c(4:12)])
+M = cor(train.num[,c(3:13)])
 corrplot(M)+ theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 ```
@@ -268,8 +273,12 @@ corrplot(M)+ theme(axis.text.x = element_text(angle = 45, hjust=1))
   -school.type.x
   
 ```{r}
+regression_columns <- c('school_type', 'unduplicatedfrpm_eligible_count', 'foster', 'homeless', 'migrantprogram', 'english_learner', 'charter_school', 'nslp_provision_status', 'result.max')
 
+classification_columns <- c('school_type', 'unduplicatedfrpm_eligible_count', 'foster', 'homeless', 'migrantprogram', 'english_learner', 'charter_school', 'nslp_provision_status', 'action_level_exceedance')
 
+train.regression <- train[ , (names(train) %in% regression_columns)]
+train.classification <- train[ , (names(train) %in% classification_columns)]
 ```
 
   
@@ -282,8 +291,11 @@ corrplot(M)+ theme(axis.text.x = element_text(angle = 45, hjust=1))
       - prediction: mean result
 
 ```{r}
-
-
+lm.fit <- lm(result.max ~ ., data=train.regression)
+rmse.train = sqrt(mean(lm.fit$residuals^2))
+cv1 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 2, seed=1)
+#cv2 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
+#cv3 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 100, seed=1)
 ```
 
 
@@ -292,5 +304,10 @@ corrplot(M)+ theme(axis.text.x = element_text(angle = 45, hjust=1))
     -dont use knn bc not interpretable
   -objective: prioritize low false negatives (check confusion matrix for appropriate metric)
   -baseline: "No exceedance"
+```{r}
+
+```
+
+
 
 -Find bias/variance trade-off plot for model selection
