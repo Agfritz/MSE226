@@ -149,6 +149,62 @@ Things to viz:
 -grouped histogram of results for factors
 -scatterplot results for continuous
 -Density plots for continuous
+```{r}
+cont.colnames <- train %>% select_if(is.numeric) %>% colnames()
+fact.colnames <- train %>% select_if(negate(is.numeric)) %>% colnames()
+print(cont.colnames)
+
+ggplot(data=train)+
+  geom_density(aes(`free_&reducedmealprogram`))
+
+ggplot(data=train)+
+  geom_density(aes(foster))
+
+ggplot(data=train)+
+  geom_density(aes(homeless))
+
+ggplot(data=train)+
+  geom_density(aes(migrantprogram))
+
+ggplot(data=train)+
+  geom_density(aes(direct_certification))
+
+ggplot(data=train)+
+  geom_density(aes(unduplicatedfrpm_eligible_count))
+
+ggplot(data=train)+
+  geom_density(aes(`english_learner_(el)`))
+
+ggplot(data=train)+
+  geom_density(aes(`calpads_unduplicated_pupil_count(upc)`))
+
+ggplot(data=train)+
+  geom_density(aes(result.max))
+
+```
+
+```{r}
+ggplot(data=train)+
+  geom_bar(aes(district_type))
+
+ggplot(data=train)+
+  geom_bar(aes(school_type.x))
+
+ggplot(data=train)+
+  geom_bar(aes(educational_option_type))
+
+ggplot(data=train)+
+  geom_bar(aes(nslp_provision_status))
+
+ggplot(data=train)+
+  geom_bar(aes(charter_funding_type))
+
+ggplot(data=train)+
+  geom_bar(aes(school_type.y))
+
+```
+
+
 -Correlation matrix continuous variables
 ```{r}
 train.num <- train %>% select_if(is.numeric)
