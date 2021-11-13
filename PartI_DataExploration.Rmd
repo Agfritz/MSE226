@@ -26,23 +26,23 @@ library(ROCR)
 Then, we load the data:
 ```{r}
 school_demographics <- read_excel("Data/cupc1718-k12.xlsx", sheet = "School-Level CALPADS UPC Data", skip = 1)
-Hg_SchoolDistricts <- read.csv("Data/Hg_SchoolDistricts.csv")
+Pb_SchoolDistricts <- read.csv("Data/Hg_SchoolDistricts.csv")
 
 ```
 
-Next, we clean the columns:
+Next, we clean the column names:
 ```{r}
 colnames(school_demographics) <- gsub(" ", "_", colnames(school_demographics))
-colnames(Hg_SchoolDistricts) <- gsub(" ", "_", colnames(Hg_SchoolDistricts))
+colnames(Pb_SchoolDistricts) <- gsub(" ", "_", colnames(Pb_SchoolDistricts))
 
 colnames(school_demographics) <- tolower(colnames(school_demographics))
-colnames(Hg_SchoolDistricts) <- tolower(colnames(Hg_SchoolDistricts))
+colnames(Pb_SchoolDistricts) <- tolower(colnames(Pb_SchoolDistricts))
 
 colnames(school_demographics) <- gsub("\r\n", "", colnames(school_demographics))
-colnames(Hg_SchoolDistricts) <- gsub("\r\n", "", colnames(Hg_SchoolDistricts))
+colnames(Pb_SchoolDistricts) <- gsub("\r\n", "", colnames(Pb_SchoolDistricts))
 
 colnames(school_demographics) <- gsub("&", "", colnames(school_demographics))
-colnames(Hg_SchoolDistricts) <- gsub("&", "", colnames(Hg_SchoolDistricts))
+colnames(Pb_SchoolDistricts) <- gsub("&", "", colnames(Pb_SchoolDistricts))
 
 colnames(school_demographics) <- gsub("_(y/n)", "", colnames(school_demographics), fixed=TRUE)
 
@@ -55,13 +55,13 @@ colnames(school_demographics) <- gsub("(upc)", "", colnames(school_demographics)
 ```
 
 
-Then, we merge the datasets:
+Then, we merge the datasets for school demographics and school lead levels by school name and county:
 ```{r}
-combined_data <- merge(school_demographics, Hg_SchoolDistricts, by.x=c("school_name", "county_name"), by.y = c("school_name", "school_county")) 
+combined_data <- merge(school_demographics, Pb_SchoolDistricts, by.x=c("school_name", "county_name"), by.y = c("school_name", "school_county")) 
 
 ```
 
-Next, we clean the dataset
+Then, we clean the combined dataset:
 ```{r}
 #select column names according to google doc
 
@@ -72,6 +72,11 @@ combined_data_clean <- combined_data[ , !(names(combined_data) %in% drops)]
 #remove resampled observations
 combined_data_clean$ale_follow_up_action <- combined_data_clean$ale_follow_up_action %>% replace_na('NA')
 combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled (Incorrect initial sampling method)"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Initial Sample Incorrectly Sampled"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Incorrect initial sample, not drinking water location"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resamped"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled, Incorrect Initial Sampling"),]
 
 #remove charter schools with funding type na
 combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
@@ -90,17 +95,7 @@ combined_data_clean_grouped <- unique(combined_data_clean_grouped)
 #convert exceedence to binary variable (0,1)
 combined_data_clean_grouped$action_level_exceedance <- ifelse(combined_data_clean_grouped$action_level_exceedance=="Yes",1,0)
 
-```
-
-Qualitatively establish the difference between public and charter school
-Look into NSLP provision status
-
-Charter school funding type-> drop row if funding type na, but is charter school (no nas for charter schools, no action needed)
-
-total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type -> dropnas
-
-water system name, sample date, follow up status and action -> keep nas
-```{r}
+#remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
 combined_data_clean_grouped = combined_data_clean_grouped[,!(names(combined_data_clean_grouped) =='result')]
 combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>% 
  drop_na(total_enrollment)  %>%
@@ -115,8 +110,8 @@ combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>%
 
 ```
 
-need to make ratios instead of numbers
 
+Next, we convert our covariates to ratios so that they are not biased by the total enrollment:
 ```{r}
 print(colnames(combined_data_clean_grouped_rmna))
 combined_data_clean_grouped_rmna$free_reducedmealprogram =  combined_data_clean_grouped_rmna$free_reducedmealprogram/combined_data_clean_grouped_rmna$total_enrollment
@@ -134,11 +129,14 @@ combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count=  combined_data
 combined_data_clean_grouped_rmna$english_learner =  combined_data_clean_grouped_rmna$english_learner /combined_data_clean_grouped_rmna$total_enrollment
 
 combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_count =  combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_count /combined_data_clean_grouped_rmna$total_enrollment
+  
+```
 
+We make adjustments to combine school type categories with small populations:
+```{r}
 combined_data_clean_grouped_rmna <- combined_data_clean_grouped_rmna %>%
   rename(school_type = school_type.x)
 
-print(unique(combined_data_clean_grouped_rmna$school_type))
 high_columns <- c("High Schools (Public)", "High Schools In 1 School Dist. (Public)")
 middle_columns <- c("Intermediate/Middle Schools (Public)", "Junior High Schools (Public)")
 elem_columns <- c("Elemen Schools In 1 School Dist. (Public)", "Elementary Schools (Public)")
@@ -151,12 +149,10 @@ combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$sc
 
 has_provisions <- c("Provision 3", "Provision 2", "Provision 1", "CEP", "Breakfast Provision 2", "Lunch Provision 2")
 combined_data_clean_grouped_rmna$nslp_provision_status[combined_data_clean_grouped_rmna$nslp_provision_status %in% has_provisions] <- "Provisions"
-
-  
 ```
 
-Next we allocate our training and test sets
--set aside test and training data (80-20, do CV, we dont have infinite data)
+
+We allocate our training and test sets:
 ```{r}
 #calculate the number of observations that should be in our training set
 size_training = round(.8*nrow(combined_data_clean_grouped_rmna), digits = 0)
@@ -168,23 +164,9 @@ test = combined_data_clean_grouped_rmna[-in.train, ]
 
 ```
 
-Next we start visualizing our training data
-```{r}
-ggplot(data = train) + geom_bar(mapping = aes(x=county_name)) + theme(axis.text.x = element_text(angle = 90))
-ggplot(data = train) + geom_bar(mapping = aes(x=school_type)) + theme(axis.text.x = element_text(angle = 90)) #seeing the number of schools that are categorized weirdly, we may want to combine #I agree we can combine some of these categories 
-ggplot(data = train) + geom_bar(mapping = aes(x=school_type.y)) + theme(axis.text.x = element_text(angle = 90)) 
-#I think we can remove school type y
-ggplot(data = train) + geom_bar(mapping = aes(x=charter_funding_type)) + theme(axis.text.x = element_text(angle = 90))
-ggplot(data = train) + geom_bar(mapping = aes(x=ale_follow_up_status)) + theme(axis.text.x = element_text(angle = 90)) #doesn't look like we have a ton of data on this...
-#This is only if there was an exceedence! so i think that is why there are so few 
 
-```
+We generate density plots for each continuous covariate in our training data set:
 
-
-
-Things to viz:
-
--Density plots for continuous
 ```{r}
 cont.colnames <- train %>% select_if(is.numeric) %>% colnames()
 fact.colnames <- train %>% select_if(negate(is.numeric)) %>% colnames()
@@ -221,8 +203,7 @@ ggplot(data=train)+
   geom_density(aes(log(result.max)))
 ```
 
--barplots to describe the population
-
+And barplots for each discrete variable:
 ```{r}
 print(cont.colnames)
 
@@ -251,7 +232,8 @@ ggplot(data=train)+
   geom_bar(aes(charter_school))
 
 ```
-grouped histogram of results for factors
+
+We group the distribution of results by the value of a factor:
 ```{r}
 ggplot(data=train)+
   geom_violin(aes(x=district_type, y=log(result.max)))+ theme(axis.text.x = element_text(angle = 45, hjust=1))
@@ -276,7 +258,7 @@ ggplot(data=train)+
 ```
 
 
--scatterplot/ Correlation matrix continuous variables
+We create a scatterplot and correlation plot for continuous variables:
 
 ```{r}
 train.num <- train %>% select_if(is.numeric)
@@ -284,18 +266,9 @@ ggpairs(train.num[,c(3:13)], lower = list(continuous = wrap("smooth", alpha = 0.
 
 M = cor(train.num[,c(3:13)])
 corrplot(M)+ theme(axis.text.x = element_text(angle = 45, hjust=1))
-
 ```
--covariates that seem important:
-  -undupliccated frpm
-  -foster
-  -homeless
-  -migrant program
-  -english_learner_(el)
-  -charter school
-  -nslp_provision_status
-  -school.type.x
-  
+
+
 ```{r}
 regression_columns <- c('school_type', 'unduplicatedfrpm_eligible_count', 'foster', 'homeless', 'migrantprogram', 'english_learner', 'charter_school', 'nslp_provision_status', 'result.max')
 
@@ -304,6 +277,11 @@ classification_columns <- c('school_type', 'unduplicatedfrpm_eligible_count', 'f
 train.regression <- train[ , (names(train) %in% regression_columns)]
 train.classification <- train[ , (names(train) %in% classification_columns)]
 
+```
+
+      
+Initiate a ridge model:
+```{r}
 #use glmnet to do ridge
 school_type_rm <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, action_level_exceedance, ale_follow_up_action, ale_follow_up_status))
 
@@ -314,52 +292,48 @@ ridge.mod <- glmnet(x, y, alpha = 0, lambda = grid)
 
 coef(ridge.mod)
 plot_glmnet(ridge.mod)
-
 ```
 
-  
--Prediction model
-  -interpretable model
-    -dont use knn bc not interpretable
-    -use lasso, ridge, regular OLS
-  -acceptable performance: RMSE
-    -baseline "naive" estimators: 
-      - prediction: mean result
-
+Run the remainder of the models:
 ```{r}
-n = 6020
+n = 6082
 set.seed(1)
+
 lm.fit <- lm(result.max ~ ., data=train.regression)
-(rmse.train = sqrt(mean(lm.fit$residuals^2)))
+rmse.train = sqrt(mean(lm.fit$residuals^2))
 print(lm.fit)
 cv1 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
-print(cv1)
+sprintf("rmse lm.fit %s", cv1)
+sprintf("rmse lm.fit %s", rmse.train)
+
 residuals1 <- lm.fit$residuals
 
 cv2 <- cv.glmnet(x, y, alpha = 0)
 print(cv2)
-print("RMSE: ")
-rmse <- sqrt(cv2$cvm)
-print(rmse)
-#residuals2 <- ridge.mod$residuals
+plot(cv2)
+sprintf("rmse ridge %s", cv2)
 
 lm.fit2 <- lm(result.max ~., data=school_type_rm )
 (rmse.train2 = sqrt(mean(lm.fit2$residuals^2)))
 cv3 <- cvFit(lm.fit2, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
-print(cv3)
 residuals3 <- lm.fit2$residuals
+sprintf("rmse lm.fit2 %s", rmse.train2)
+sprintf("rmse cv lm.fit2 %s", cv3)
 
 #we can say that we tried to do this and write about it not working
 lm.fit3 <- lm(result.max  ~ . + .:., data = school_type_rm)
-(rmse.train = sqrt(mean(lm.fit3$residuals^2)))
+rmse.train.4 = sqrt(mean(lm.fit3$residuals^2))
 cv4 <- cvFit(lm.fit3, data=school_type_rm, y=school_type_rm$result.max, K = 10, seed=1)
-print(cv4)
+sprintf("rmse lm.fit3 interacctions %s", cv4)
+sprintf("rmse lm.fit3 interacctions %s", rmse.train.4)
+
 
 lm.fit4 <- lm(result.max  ~ . + .:., data = train.regression)
-(rmse.train = sqrt(mean(lm.fit4$residuals^2)))
+rmse.train.5 = sqrt(mean(lm.fit4$residuals^2))
 cv5 <- cvFit(lm.fit4, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
-print(cv5)
 residuals5 <- lm.fit4$residuals
+sprintf("rmse lm.fit4 squared transforms %s", cv5)
+sprintf("rmse lm.fit4 squared transforms %s", rmse.train.5)
 
 school_type_rm$homeless <- school_type_rm$homeless + .5
 school_type_rm$foster <- school_type_rm$foster + .5
@@ -367,11 +341,27 @@ school_type_rm$migrantprogram <- school_type_rm$migrantprogram + .5
 school_type_rm$english_learner <- school_type_rm$english_learner + .5
 
 lm.fit5 <- lm(log(school_type_rm$result.max) ~ log(school_type_rm$foster) + log(school_type_rm$homeless) +log(school_type_rm$migrantprogram) + log(school_type_rm$english_learner), data=school_type_rm)
-(rmse.train = sqrt(mean((exp(lm.fit5$residuals))^2)))
+rmse.train.6 = sqrt(mean((exp(lm.fit5$residuals))^2))
 cv6 <- cvFit(lm.fit5, data=school_type_rm, y=log(school_type_rm$result.max), K = 10, seed=1)
-print(cv6)
 residuals6 <- lm.fit5$residuals
+sprintf("rmse lm.fit5 log transforms %s", cv6)
+sprintf("rmse lm.fit5 log transforms %s", rmse.train.6)
 
+```
+
+Plot cv RMSE as a function of k:
+```{r}
+k = c(2:20)
+cvk = rep(0, 19)
+for (i in 1:19){
+  cvk[i]=exp(cvFit(lm.fit5, data=school_type_rm, y=log(school_type_rm$result.max), K = k[i], seed=1)$cv)}
+
+plot(x=k, y=cvk)
+
+```
+
+Plot the residuals
+```{r}
 model = factor(c(rep("fm1", n), rep("fm3", n), rep("fm5", n),  rep("fm6", n)))
 residuals = c(residuals1, residuals3, residuals5, residuals6)
 df = data.frame(residuals, model)
@@ -389,12 +379,14 @@ ggplot() + geom_point(aes(x = lm.fit5$residuals, y = lm.fit5$fitted.values))
 
 ```
 
+Generate regression tables:
+```{r}
+all <- stargazer(lm.fit5, title="Selected Prediction Model", align=TRUE, dep.var.labels=c("Maximum Lead (ug/L)"), no.space=TRUE, type = "html")
+writeLines(text = all, file("regression_predict.html"))
+```
 
--Classification model
-    -logistic regression
-    -dont use knn bc not interpretable
-  -objective: prioritize low false negatives (check confusion matrix for appropriate metric)
-  -baseline: "No exceedance"
+
+Then, we develop a classification model using logistic regression:
 ```{r}
 school_type_rm <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, result.max, ale_follow_up_action, ale_follow_up_status))
 
@@ -409,6 +401,10 @@ y <- train.classification$action_level_exceedance
 logistic.mod.2 <- glm(y~x, data= train.classification, family = binomial())
 summary(logistic.mod.2)
 
+```
+
+We find the model with the best AIC using stepwise addition of covariates:
+```{r}
 full_model = glm(action_level_exceedance~school_type+unduplicatedfrpm_eligible_count+foster+homeless+migrantprogram+english_learner+charter_school+nslp_provision_status, data= train.classification, family = binomial())
 summary(full_model)
 null_model = glm(action_level_exceedance ~ 1, family = binomial(), data = train.classification)
@@ -416,7 +412,10 @@ summary(null_model)
 step(null_model, list(upper = full_model), direction = 'forward')
 best_aic_model = glm(action_level_exceedance ~ charter_school + unduplicatedfrpm_eligible_count + 
     english_learner, family = binomial(), data = train.classification)
+```
 
+We develop an ROC curve and find the optimal cutoff threshold for positives for both sensitivity and specificity:
+```{r}
 fitted_model = fitted(best_aic_model)
 
 
@@ -427,7 +426,10 @@ options(repr.plot.width=4, repr.plot.height=4)
 plot(my_roc)
 
 threshold <- coords(my_roc, "best", ret = "threshold")
+```
 
+We plot the accuracy and sensitivity as a funcction of threshold/ cutoff value and develop a confusion matrix: 
+```{r}
 pred <- prediction(roc_data$fit,roc_data$obs)
 acc.perf = performance(pred, measure = "acc")
 plot(acc.perf)
@@ -438,14 +440,10 @@ plot(tpr.perf)
 threshold2 <- 0.02
 table(fitted_model > threshold$threshold, train.classification$action_level_exceedance)
 table(fitted_model > threshold2, train.classification$action_level_exceedance)
-
 ```
 
 ```{r}
-closed_all <- stargazer(M1Cfe.a, M1Cfe.b, M1Cfe.c, M1Cfe.e, M2Cfe.a, M2Cfe.b, M2Cfe.d,M3Cfe.a, M3Cfe.b,  M3Cfe.d, title="All Closed Systems", align=TRUE, dep.var.labels=c("Cooling Water Consumption Intensity (Ln)"), omit.stat=c("adj.rsq", "f"), no.space=TRUE, type = "html")
-writeLines(text = closed_all, con = '/Users/alisonfritz/Box/We3 Lab/05_Active_Research_Projects/01_research for cooling water/04_Processed_Data/Closed_all_log_dropped.htm')
+all <- stargazer(fitted_model, title="Selected Classification Model", align=TRUE, dep.var.labels=c("Probability of Exceedance"), no.space=TRUE, type = "html")
+
 ```
 
-
-
--Find bias/variance trade-off plot for model selection
