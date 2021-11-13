@@ -13,6 +13,7 @@ library("GGally")
 library(corrplot)
 library(cvTools)
 library(glmnet)
+library(plotmo)
 ```
 
 Then, we load the data:
@@ -129,6 +130,22 @@ combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_count =  combined_da
 
 combined_data_clean_grouped_rmna <- combined_data_clean_grouped_rmna %>%
   rename(school_type = school_type.x)
+
+print(unique(combined_data_clean_grouped_rmna$school_type))
+high_columns <- c("High Schools (Public)", "High Schools In 1 School Dist. (Public)")
+middle_columns <- c("Intermediate/Middle Schools (Public)", "Junior High Schools (Public)")
+elem_columns <- c("Elemen Schools In 1 School Dist. (Public)", "Elementary Schools (Public)")
+other_columns <- c("Alternative Schools of Choice", "Continuation High Schools", "District Community Day Schools", "K-12 Schools (Public)", "Opportunity Schools", "Preschool", "County Community", "Special Education Schools (Public)", "Juvenile Court Schools")
+
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% high_columns] <- "High"
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% middle_columns] <- "Middle"
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% elem_columns] <- "Elem"
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% other_columns] <- "Other"
+
+has_provisions <- c("Provision 3", "Provision 2", "Provision 1", "CEP", "Breakfast Provision 2", "Lunch Provision 2")
+combined_data_clean_grouped_rmna$nslp_provision_status[combined_data_clean_grouped_rmna$nslp_provision_status %in% has_provisions] <- "Provisions"
+
+  
 ```
 
 Next we allocate our training and test sets
@@ -279,6 +296,18 @@ classification_columns <- c('school_type', 'unduplicatedfrpm_eligible_count', 'f
 
 train.regression <- train[ , (names(train) %in% regression_columns)]
 train.classification <- train[ , (names(train) %in% classification_columns)]
+
+#use glmnet to do ridge
+school_type_rm <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, action_level_exceedance, ale_follow_up_action, ale_follow_up_status))
+
+x <- model.matrix(result.max ~ .,school_type_rm)[,-1]
+y <- train$result.max
+grid <- 10^seq(1, -2, length = 10)
+ridge.mod <- glmnet(x, y, alpha = 0, lambda = grid)
+
+coef(ridge.mod)
+plot_glmnet(ridge.mod)
+
 ```
 
   
@@ -291,10 +320,12 @@ train.classification <- train[ , (names(train) %in% classification_columns)]
       - prediction: mean result
 
 ```{r}
+set.seed(1)
 lm.fit <- lm(result.max ~ ., data=train.regression)
 rmse.train = sqrt(mean(lm.fit$residuals^2))
-cv1 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 2, seed=1)
-#cv2 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
+#train.regression <- fold(train.regression, k = 2, cat_col = '')
+cv1 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
+print(cv1)
 #cv3 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 100, seed=1)
 ```
 
