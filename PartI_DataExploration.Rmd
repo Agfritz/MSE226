@@ -1,6 +1,8 @@
 ---
-title: "Part I: Data Exploration and Prediction"
-output: html_notebook
+title: 'Part I: Data Exploration and Prediction'
+output:
+  pdf_document: default
+  html_notebook: default
 ---
 
 First, we load packages:
@@ -303,7 +305,7 @@ lm.fit <- lm(result.max ~ ., data=train.regression)
 rmse.train = sqrt(mean(lm.fit$residuals^2))
 print(lm.fit)
 cv1 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
-sprintf("rmse lm.fit %s", cv1)
+sprintf("rmse lm.fit %s", cv1$cv)
 sprintf("rmse lm.fit %s", rmse.train)
 
 residuals1 <- lm.fit$residuals
@@ -311,20 +313,20 @@ residuals1 <- lm.fit$residuals
 cv2 <- cv.glmnet(x, y, alpha = 0)
 print(cv2)
 plot(cv2)
-sprintf("rmse ridge %s", cv2)
+print(sqrt(843.8))
 
 lm.fit2 <- lm(result.max ~., data=school_type_rm )
 (rmse.train2 = sqrt(mean(lm.fit2$residuals^2)))
 cv3 <- cvFit(lm.fit2, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
 residuals3 <- lm.fit2$residuals
 sprintf("rmse lm.fit2 %s", rmse.train2)
-sprintf("rmse cv lm.fit2 %s", cv3)
+sprintf("rmse cv lm.fit2 %s", cv3$cv)
 
 #we can say that we tried to do this and write about it not working
 lm.fit3 <- lm(result.max  ~ . + .:., data = school_type_rm)
 rmse.train.4 = sqrt(mean(lm.fit3$residuals^2))
 cv4 <- cvFit(lm.fit3, data=school_type_rm, y=school_type_rm$result.max, K = 10, seed=1)
-sprintf("rmse lm.fit3 interacctions %s", cv4)
+sprintf("rmse lm.fit3 interacctions %s", cv4$cv)
 sprintf("rmse lm.fit3 interacctions %s", rmse.train.4)
 
 
@@ -332,7 +334,7 @@ lm.fit4 <- lm(result.max  ~ . + .:., data = train.regression)
 rmse.train.5 = sqrt(mean(lm.fit4$residuals^2))
 cv5 <- cvFit(lm.fit4, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
 residuals5 <- lm.fit4$residuals
-sprintf("rmse lm.fit4 squared transforms %s", cv5)
+sprintf("rmse lm.fit4 squared transforms %s", cv5$cv)
 sprintf("rmse lm.fit4 squared transforms %s", rmse.train.5)
 
 school_type_rm$homeless <- school_type_rm$homeless + .5
@@ -344,7 +346,7 @@ lm.fit5 <- lm(log(school_type_rm$result.max) ~ log(school_type_rm$foster) + log(
 rmse.train.6 = sqrt(mean((exp(lm.fit5$residuals))^2))
 cv6 <- cvFit(lm.fit5, data=school_type_rm, y=log(school_type_rm$result.max), K = 10, seed=1)
 residuals6 <- lm.fit5$residuals
-sprintf("rmse lm.fit5 log transforms %s", cv6)
+sprintf("rmse lm.fit5 log transforms %s", exp(cv6$cv))
 sprintf("rmse lm.fit5 log transforms %s", rmse.train.6)
 
 ```
@@ -443,7 +445,6 @@ table(fitted_model > threshold2, train.classification$action_level_exceedance)
 ```
 
 ```{r}
-all <- stargazer(fitted_model, title="Selected Classification Model", align=TRUE, dep.var.labels=c("Probability of Exceedance"), no.space=TRUE, type = "html")
-
+all_log <- stargazer(fitted_model, title="Selected Classification Model", align=TRUE, dep.var.labels=c("Probability of Exceedance"), no.space=TRUE, type = "html")
 ```
 
