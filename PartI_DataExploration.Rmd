@@ -14,6 +14,13 @@ library(corrplot)
 library(cvTools)
 library(glmnet)
 library(plotmo)
+library(pROC)
+library(tibble)
+library(modelr)
+library(repr)
+library(knitr)
+library(stargazer)
+library(ROCR)
 ```
 
 Then, we load the data:
@@ -389,7 +396,54 @@ ggplot() + geom_point(aes(x = lm.fit5$residuals, y = lm.fit5$fitted.values))
   -objective: prioritize low false negatives (check confusion matrix for appropriate metric)
   -baseline: "No exceedance"
 ```{r}
+school_type_rm <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, result.max, ale_follow_up_action, ale_follow_up_status))
 
+x <- model.matrix(action_level_exceedance ~ .,school_type_rm)[,-1]
+y <- school_type_rm$action_level_exceedance
+logistic.mod <- glm(y~x, data= school_type_rm, family = binomial())
+summary(logistic.mod)
+
+
+x <- model.matrix(action_level_exceedance ~ .,train.classification)[,-1]
+y <- train.classification$action_level_exceedance
+logistic.mod.2 <- glm(y~x, data= train.classification, family = binomial())
+summary(logistic.mod.2)
+
+full_model = glm(action_level_exceedance~school_type+unduplicatedfrpm_eligible_count+foster+homeless+migrantprogram+english_learner+charter_school+nslp_provision_status, data= train.classification, family = binomial())
+summary(full_model)
+null_model = glm(action_level_exceedance ~ 1, family = binomial(), data = train.classification)
+summary(null_model)
+step(null_model, list(upper = full_model), direction = 'forward')
+best_aic_model = glm(action_level_exceedance ~ charter_school + unduplicatedfrpm_eligible_count + 
+    english_learner, family = binomial(), data = train.classification)
+
+fitted_model = fitted(best_aic_model)
+
+
+roc_data = data.frame(fit = fitted_model, obs = train.classification$action_level_exceedance)
+my_roc = roc(roc_data$obs ~ roc_data$fit, plot = FALSE)
+cat("AUC = ", toString(auc(my_roc)))
+options(repr.plot.width=4, repr.plot.height=4)
+plot(my_roc)
+
+threshold <- coords(my_roc, "best", ret = "threshold")
+
+pred <- prediction(roc_data$fit,roc_data$obs)
+acc.perf = performance(pred, measure = "acc")
+plot(acc.perf)
+
+tpr.perf = performance(pred, measure = "tpr")
+plot(tpr.perf)
+
+threshold2 <- 0.02
+table(fitted_model > threshold$threshold, train.classification$action_level_exceedance)
+table(fitted_model > threshold2, train.classification$action_level_exceedance)
+
+```
+
+```{r}
+closed_all <- stargazer(M1Cfe.a, M1Cfe.b, M1Cfe.c, M1Cfe.e, M2Cfe.a, M2Cfe.b, M2Cfe.d,M3Cfe.a, M3Cfe.b,  M3Cfe.d, title="All Closed Systems", align=TRUE, dep.var.labels=c("Cooling Water Consumption Intensity (Ln)"), omit.stat=c("adj.rsq", "f"), no.space=TRUE, type = "html")
+writeLines(text = closed_all, con = '/Users/alisonfritz/Box/We3 Lab/05_Active_Research_Projects/01_research for cooling water/04_Processed_Data/Closed_all_log_dropped.htm')
 ```
 
 
