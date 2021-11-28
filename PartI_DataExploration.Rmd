@@ -356,6 +356,11 @@ residuals6 <- lm.fit5$residuals
 # doing the fit for fm6 (lm.fit5) on test data
 test_rm_school_type <- subset(test, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, action_level_exceedance, ale_follow_up_action, ale_follow_up_status))
 
+test_rm_school_type$homeless <- test_rm_school_type$homeless + .5
+test_rm_school_type$foster <- test_rm_school_type$foster + .5
+test_rm_school_type$migrantprogram <- test_rm_school_type$migrantprogram + .5
+test_rm_school_type$english_learner <- test_rm_school_type$english_learner + .5
+
 lm.fit6 <- lm(log(test_rm_school_type$result.max) ~ log(test_rm_school_type$foster) + log(test_rm_school_type$homeless) +log(test_rm_school_type$migrantprogram) + log(test_rm_school_type$english_learner), data=test_rm_school_type)
 (summary(lm.fit6))
 
