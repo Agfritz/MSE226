@@ -156,6 +156,7 @@ combined_data_clean_grouped_rmna$nslp_provision_status[combined_data_clean_group
 
 We allocate our training and test sets:
 ```{r}
+set.seed(1)
 #calculate the number of observations that should be in our training set
 size_training = round(.8*nrow(combined_data_clean_grouped_rmna), digits = 0)
 
@@ -166,9 +167,10 @@ test = combined_data_clean_grouped_rmna[-in.train, ]
 
 ```
 
+
+
 Run the remainder of the models:
 ```{r}
-n = 6082
 set.seed(1)
 
 test$homeless <- test$homeless + .5
@@ -181,6 +183,11 @@ rmse.test.6 = sqrt(mean((exp(fm6$residuals))^2))
 sprintf("test rmse: prediction model %s", rmse.test.6)
 
 ```
+
+```{r}
+summary(fm6)
+```
+
 
 Generate regression tables:
 ```{r}
@@ -212,6 +219,11 @@ spec <- 683/(683+803)
 acc <- (24+683)/(683+803+24+10)
 
 ```
+```{r}
+summary(best_aic_model)
+```
+
+
 Generate regression tables:
 
 ```{r}
