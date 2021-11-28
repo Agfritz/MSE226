@@ -1,0 +1,222 @@
+---
+title: 'Part II'
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+First, we load packages:
+```{r}
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library("GGally")
+library(corrplot)
+library(cvTools)
+library(glmnet)
+library(plotmo)
+library(pROC)
+library(tibble)
+library(modelr)
+library(repr)
+library(knitr)
+library(stargazer)
+library(ROCR)
+```
+
+Then, we load the data:
+```{r}
+school_demographics <- read_excel("Data/cupc1718-k12.xlsx", sheet = "School-Level CALPADS UPC Data", skip = 1)
+Pb_SchoolDistricts <- read.csv("Data/Hg_SchoolDistricts.csv")
+
+```
+
+Next, we clean the column names:
+```{r}
+colnames(school_demographics) <- gsub(" ", "_", colnames(school_demographics))
+colnames(Pb_SchoolDistricts) <- gsub(" ", "_", colnames(Pb_SchoolDistricts))
+
+colnames(school_demographics) <- tolower(colnames(school_demographics))
+colnames(Pb_SchoolDistricts) <- tolower(colnames(Pb_SchoolDistricts))
+
+colnames(school_demographics) <- gsub("\r\n", "", colnames(school_demographics))
+colnames(Pb_SchoolDistricts) <- gsub("\r\n", "", colnames(Pb_SchoolDistricts))
+
+colnames(school_demographics) <- gsub("&", "", colnames(school_demographics))
+colnames(Pb_SchoolDistricts) <- gsub("&", "", colnames(Pb_SchoolDistricts))
+
+colnames(school_demographics) <- gsub("_(y/n)", "", colnames(school_demographics), fixed=TRUE)
+
+colnames(school_demographics) <- gsub("_(el)", "", colnames(school_demographics), fixed=TRUE)
+
+colnames(school_demographics) <- gsub("_(upc)", "", colnames(school_demographics), fixed=TRUE)
+
+colnames(school_demographics) <- gsub("(upc)", "", colnames(school_demographics), fixed=TRUE)
+
+```
+
+
+Then, we merge the datasets for school demographics and school lead levels by school name and county:
+```{r}
+combined_data <- merge(school_demographics, Pb_SchoolDistricts, by.x=c("school_name", "county_name"), by.y = c("school_name", "school_county")) 
+
+```
+
+Then, we clean the combined dataset:
+```{r}
+#select column names according to google doc
+
+drops <- c("academic_year", "county_code", "district_code", "school_code", "charter_number", "irc", "low_grade", "high_grade", "unduplicated", "calpads_fall_1", "pscode", "district", "school_address", "school_site_name", "xmod", "rpt_unit", "water_system_county", "samp_date", "sample_loaddate", "samp_loaded", "samp_time", "pws_id")
+
+combined_data_clean <- combined_data[ , !(names(combined_data) %in% drops)]
+
+#remove resampled observations
+combined_data_clean$ale_follow_up_action <- combined_data_clean$ale_follow_up_action %>% replace_na('NA')
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled (Incorrect initial sampling method)"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Initial Sample Incorrectly Sampled"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Incorrect initial sample, not drinking water location"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resamped"),]
+combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_action == "Resampled, Incorrect Initial Sampling"),]
+
+#remove charter schools with funding type na
+combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
+
+#remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
+combined_data_clean %>% drop_na("total_enrollment", "free_reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner" , "result", "action_level_exceedance", "school_type.y")
+
+#combine multiple samples by taking max samples when multiple samples taken at a school
+combined_data_clean_grouped <- combined_data_clean %>% 
+  group_by(school_name, county_name) %>% 
+  mutate(result.max= max(result))
+
+combined_data_clean_grouped <-subset(combined_data_clean_grouped, result==result.max)
+combined_data_clean_grouped <- unique(combined_data_clean_grouped)
+
+#convert exceedence to binary variable (0,1)
+combined_data_clean_grouped$action_level_exceedance <- ifelse(combined_data_clean_grouped$action_level_exceedance=="Yes",1,0)
+
+#remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
+combined_data_clean_grouped = combined_data_clean_grouped[,!(names(combined_data_clean_grouped) =='result')]
+combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>% 
+ drop_na(total_enrollment)  %>%
+ drop_na(homeless)  %>%
+ drop_na(migrantprogram)  %>%
+ drop_na(direct_certification)  %>%
+ drop_na(unduplicatedfrpm_eligible_count)  %>%
+ drop_na(english_learner)  %>%
+ drop_na(result.max)  %>%
+ drop_na(action_level_exceedance)  %>%
+ drop_na(school_type.y)
+
+```
+
+
+Next, we convert our covariates to ratios so that they are not biased by the total enrollment:
+```{r}
+print(colnames(combined_data_clean_grouped_rmna))
+combined_data_clean_grouped_rmna$free_reducedmealprogram =  combined_data_clean_grouped_rmna$free_reducedmealprogram/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$foster =  combined_data_clean_grouped_rmna$foster/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$homeless =  combined_data_clean_grouped_rmna$homeless/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$migrantprogram =  combined_data_clean_grouped_rmna$migrantprogram/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$direct_certification =  combined_data_clean_grouped_rmna$direct_certification/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count=  combined_data_clean_grouped_rmna$unduplicatedfrpm_eligible_count/combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$english_learner =  combined_data_clean_grouped_rmna$english_learner /combined_data_clean_grouped_rmna$total_enrollment
+
+combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_count =  combined_data_clean_grouped_rmna$calpads_unduplicated_pupil_count /combined_data_clean_grouped_rmna$total_enrollment
+  
+```
+
+We make adjustments to combine school type categories with small populations:
+```{r}
+combined_data_clean_grouped_rmna <- combined_data_clean_grouped_rmna %>%
+  rename(school_type = school_type.x)
+
+high_columns <- c("High Schools (Public)", "High Schools In 1 School Dist. (Public)")
+middle_columns <- c("Intermediate/Middle Schools (Public)", "Junior High Schools (Public)")
+elem_columns <- c("Elemen Schools In 1 School Dist. (Public)", "Elementary Schools (Public)")
+other_columns <- c("Alternative Schools of Choice", "Continuation High Schools", "District Community Day Schools", "K-12 Schools (Public)", "Opportunity Schools", "Preschool", "County Community", "Special Education Schools (Public)", "Juvenile Court Schools")
+
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% high_columns] <- "High"
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% middle_columns] <- "Middle"
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% elem_columns] <- "Elem"
+combined_data_clean_grouped_rmna$school_type[combined_data_clean_grouped_rmna$school_type %in% other_columns] <- "Other"
+
+has_provisions <- c("Provision 3", "Provision 2", "Provision 1", "CEP", "Breakfast Provision 2", "Lunch Provision 2")
+combined_data_clean_grouped_rmna$nslp_provision_status[combined_data_clean_grouped_rmna$nslp_provision_status %in% has_provisions] <- "Provisions"
+```
+
+
+We allocate our training and test sets:
+```{r}
+#calculate the number of observations that should be in our training set
+size_training = round(.8*nrow(combined_data_clean_grouped_rmna), digits = 0)
+
+#allocate training and test data
+in.train = sample(nrow(combined_data_clean_grouped_rmna), size = size_training)
+train = combined_data_clean_grouped_rmna[in.train, ]
+test = combined_data_clean_grouped_rmna[-in.train, ]
+
+```
+
+Run the remainder of the models:
+```{r}
+n = 6082
+set.seed(1)
+
+test$homeless <- test$homeless + .5
+test$foster <- test$foster + .5
+test$migrantprogram <- test$migrantprogram + .5
+test$english_learner <- test$english_learner + .5
+
+fm6 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=test)
+rmse.test.6 = sqrt(mean((exp(fm6$residuals))^2))
+sprintf("test rmse: prediction model %s", rmse.test.6)
+
+```
+
+Generate regression tables:
+```{r}
+all <- stargazer(fm6, title="Selected Prediction Model", align=TRUE, dep.var.labels=c("Maximum Lead (ug/L)"), no.space=TRUE, type = "html")
+writeLines(text = all, file("regression_predict.html"))
+```
+
+#fm6 is the best model.
+
+Best classification model:
+```{r}
+best_aic_model = glm(action_level_exceedance ~ charter_school + unduplicatedfrpm_eligible_count + 
+    english_learner, family = binomial(), data = test)
+```
+
+Generate performance tables
+```{r}
+fitted_model = fitted(best_aic_model)
+
+roc_data = data.frame(fit = fitted_model, obs = test$action_level_exceedance)
+my_roc = roc(roc_data$obs ~ roc_data$fit, plot = FALSE)
+cat("AUC = ", toString(auc(my_roc)))
+
+threshold2 <- 0.02
+table(fitted_model > threshold2, test$action_level_exceedance)
+
+sens <- 24/(24+10)
+spec <- 683/(683+803)
+acc <- (24+683)/(683+803+24+10)
+
+```
+Generate regression tables:
+
+```{r}
+all_log <- stargazer(best_aic_model, title="Selected Classification Model", align=TRUE, dep.var.labels=c("Probability of Exceedance"), no.space=TRUE, type = "html")
+writeLines(text = all_log, file("classification_test.html"))
+
+```
+

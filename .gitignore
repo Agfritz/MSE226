@@ -39,3 +39,5 @@ vignettes/*.pdf
 .Renviron
 *.html
 .DS_Store
+PartI_DataExploration_files/figure-latex/unnamed-chunk-10-1.pdf
+*.pdf
