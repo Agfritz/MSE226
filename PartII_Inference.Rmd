@@ -185,9 +185,16 @@ train.regression$migrantprogram <- train.regression$migrantprogram + .5
 train.regression$english_learner <- train.regression$english_learner + .5
 
 fm6 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=train.regression)
-rmse.train.6 = sqrt(mean((exp(fm6$residuals))^2))
-sprintf("training rmse: prediction model %s", rmse.train.6)
 
+cv6 <- cvFit(fm6, data=train.regression, y=log(train.regression$result.max), K = 10, seed=1)
+
+sprintf("training cv rmse: prediction model %s", exp(cv6$cv))
+
+
+```
+
+```{r}
+summary(fm6)
 ```
 
 
@@ -198,70 +205,65 @@ test$homeless <- test$homeless + .5
 test$foster <- test$foster + .5
 test$migrantprogram <- test$migrantprogram + .5
 test$english_learner <- test$english_learner + .5
-rmse.test.fm6 <- mean((test$y - predict(fm6, test))^2)
+rmse.test.fm6 <- sqrt(mean((exp(test$result.max) - predict(fm6, test))^2))
 sprintf("test rmse: prediction model %s", rmse.test.6)
 ```
 
 
 Generate regression tables:
 ```{r}
-all <- stargazer(fm6, title="Selected Prediction Model", align=TRUE, dep.var.labels=c("Maximum Lead (ug/L)"), no.space=TRUE, type = "html")
+all <- stargazer(fm6, lm.fit, title="Selected Prediction Model", align=TRUE, dep.var.labels=c("Maximum Lead (ug/L)", "Maximum Lead (ug/L)"), no.space=TRUE, type = "html")
 writeLines(text = all, file("regression_predict.html"))
 ```
 
 
 Best classification model:
 ```{r}
+
+classification_columns <- c('school_type', 'unduplicatedfrpm_eligible_count', 'foster', 'homeless', 'migrantprogram', 'english_learner', 'charter_school', 'nslp_provision_status', 'action_level_exceedance')
+
+train.classification <- train[ , (names(train) %in% classification_columns)]
+
 best_aic_model = glm(action_level_exceedance ~ charter_school + unduplicatedfrpm_eligible_count + 
-    english_learner, family = binomial(), data = train)
+    english_learner, family = binomial(), data = train.classification)
 ```
 
-Generate performance tables
+Generate performance tables for training data:
 ```{r}
 fitted_model = fitted(best_aic_model)
 
-roc_data = data.frame(fit = fitted_model, obs = test$action_level_exceedance)
+roc_data = data.frame(fit = fitted_model, obs = train.classification$action_level_exceedance)
 my_roc = roc(roc_data$obs ~ roc_data$fit, plot = FALSE)
 cat("AUC = ", toString(auc(my_roc)))
 
 threshold2 <- 0.02
-table(fitted_model > threshold2, train$action_level_exceedance)
+table(fitted_model > threshold2, train.classification$action_level_exceedance)
 
-sens <- 24/(24+10)
-spec <- 683/(683+803)
-acc <- (24+683)/(683+803+24+10)
+sens <- 145/(145+5)
+spec <- 497/(497+5435)
+acc <- (497+145)/(497+5435+145+5)
 
-```
-```{r}
-summary(best_aic_model)
-```
+sprintf("training sensitivity: classification model %s", sens)
+sprintf("training specificity: classification model %s", spec)
+sprintf("training accuracy: classification model %s", acc)
 
-
-Generate regression tables:
-
-```{r}
-all_log <- stargazer(best_aic_model, title="Selected Classification Model", align=TRUE, dep.var.labels=c("Probability of Exceedance"), no.space=TRUE, type = "html")
-writeLines(text = all_log, file("classification_test.html"))
 
 ```
 
 We calculate the test error:
 ```{r}
-fitted_model = fitted(best_aic_model)
-
-roc_data = data.frame(fit = fitted_model, obs = test$action_level_exceedance)
+roc_data = data.frame(fit = predict(best_aic_model, newdata=test, type="response"), obs = test$action_level_exceedance)
 my_roc = roc(roc_data$obs ~ roc_data$fit, plot = FALSE)
 cat("AUC = ", toString(auc(my_roc)))
 
 threshold2 <- 0.02
-table(fitted_model > threshold2, test$action_level_exceedance)
+table(predict(best_aic_model, test, type="response") > threshold2, test$action_level_exceedance)
 
-sens <- 24/(24+10)
-spec <- 683/(683+803)
-acc <- (24+683)/(683+803+24+10)
+sens <- 0/(0+31)
+spec <- 1489/(1489+0)
+acc <- (1489)/(1489+0+31)
 
+sprintf("test sensitivity: classification model %s", sens)
+sprintf("test specificity: classification model %s", spec)
+sprintf("test accuracy: classification model %s", acc)
 ```
-```{r}
-summary(best_aic_model)
-```
-
