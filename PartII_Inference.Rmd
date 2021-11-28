@@ -159,6 +159,9 @@ We allocate our training and test sets:
 #calculate the number of observations that should be in our training set
 size_training = round(.8*nrow(combined_data_clean_grouped_rmna), digits = 0)
 
+#set seed
+set.seed(1)
+
 #allocate training and test data
 in.train = sample(nrow(combined_data_clean_grouped_rmna), size = size_training)
 train = combined_data_clean_grouped_rmna[in.train, ]
