@@ -159,6 +159,9 @@ We allocate our training and test sets:
 #calculate the number of observations that should be in our training set
 size_training = round(.8*nrow(combined_data_clean_grouped_rmna), digits = 0)
 
+#setseed
+set.seed(1)
+
 #allocate training and test data
 in.train = sample(nrow(combined_data_clean_grouped_rmna), size = size_training)
 train = combined_data_clean_grouped_rmna[in.train, ]
@@ -285,9 +288,9 @@ train.classification <- train[ , (names(train) %in% classification_columns)]
 Initiate a ridge model:
 ```{r}
 #use glmnet to do ridge
-school_type_rm <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, action_level_exceedance, ale_follow_up_action, ale_follow_up_status))
+train_rm_school_type <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, action_level_exceedance, ale_follow_up_action, ale_follow_up_status))
 
-x <- model.matrix(result.max ~ .,school_type_rm)[,-1]
+x <- model.matrix(result.max ~ .,train_rm_school_type)[,-1]
 y <- train$result.max
 grid <- 10^seq(3, -2, length = 50)
 ridge.mod <- glmnet(x, y, alpha = 0, lambda = grid)
@@ -307,6 +310,7 @@ print(lm.fit)
 cv1 <- cvFit(lm.fit, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
 sprintf("rmse lm.fit %s", cv1$cv)
 sprintf("rmse lm.fit %s", rmse.train)
+(summary(lm.fit))
 
 residuals1 <- lm.fit$residuals
 
@@ -315,39 +319,53 @@ print(cv2)
 plot(cv2)
 print(sqrt(843.8))
 
-lm.fit2 <- lm(result.max ~., data=school_type_rm )
+lm.fit2 <- lm(result.max ~., data=train_rm_school_type )
 (rmse.train2 = sqrt(mean(lm.fit2$residuals^2)))
 cv3 <- cvFit(lm.fit2, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
 residuals3 <- lm.fit2$residuals
-sprintf("rmse lm.fit2 %s", rmse.train2)
-sprintf("rmse cv lm.fit2 %s", cv3$cv)
+# sprintf("rmse lm.fit2 %s", rmse.train2)
+# sprintf("rmse cv lm.fit2 %s", cv3$cv)
+(summary(lm.fit2))
 
 #we can say that we tried to do this and write about it not working
-lm.fit3 <- lm(result.max  ~ . + .:., data = school_type_rm)
-rmse.train.4 = sqrt(mean(lm.fit3$residuals^2))
-cv4 <- cvFit(lm.fit3, data=school_type_rm, y=school_type_rm$result.max, K = 10, seed=1)
-sprintf("rmse lm.fit3 interacctions %s", cv4$cv)
-sprintf("rmse lm.fit3 interacctions %s", rmse.train.4)
+# lm.fit3 <- lm(result.max  ~ . + .:., data = train_rm_school_type)
+# rmse.train.4 = sqrt(mean(lm.fit3$residuals^2))
+# cv4 <- cvFit(lm.fit3, data=train_rm_school_type, y=train_rm_school_type$result.max, K = 10, seed=1)
+# sprintf("rmse lm.fit3 interacctions %s", cv4$cv)
+# sprintf("rmse lm.fit3 interacctions %s", rmse.train.4)
 
 
 lm.fit4 <- lm(result.max  ~ . + .:., data = train.regression)
 rmse.train.5 = sqrt(mean(lm.fit4$residuals^2))
 cv5 <- cvFit(lm.fit4, data=train.regression, y=train.regression$result.max, K = 10, seed=1)
 residuals5 <- lm.fit4$residuals
-sprintf("rmse lm.fit4 squared transforms %s", cv5$cv)
-sprintf("rmse lm.fit4 squared transforms %s", rmse.train.5)
+# sprintf("rmse lm.fit4 squared transforms %s", cv5$cv)
+# sprintf("rmse lm.fit4 squared transforms %s", rmse.train.5)
 
-school_type_rm$homeless <- school_type_rm$homeless + .5
-school_type_rm$foster <- school_type_rm$foster + .5
-school_type_rm$migrantprogram <- school_type_rm$migrantprogram + .5
-school_type_rm$english_learner <- school_type_rm$english_learner + .5
+train_rm_school_type$homeless <- train_rm_school_type$homeless + .5
+train_rm_school_type$foster <- train_rm_school_type$foster + .5
+train_rm_school_type$migrantprogram <- train_rm_school_type$migrantprogram + .5
+train_rm_school_type$english_learner <- train_rm_school_type$english_learner + .5
+(summary(lm.fit4))
 
-lm.fit5 <- lm(log(school_type_rm$result.max) ~ log(school_type_rm$foster) + log(school_type_rm$homeless) +log(school_type_rm$migrantprogram) + log(school_type_rm$english_learner), data=school_type_rm)
+lm.fit5 <- lm(log(train_rm_school_type$result.max) ~ log(train_rm_school_type$foster) + log(train_rm_school_type$homeless) +log(train_rm_school_type$migrantprogram) + log(train_rm_school_type$english_learner), data=train_rm_school_type)
 rmse.train.6 = sqrt(mean((exp(lm.fit5$residuals))^2))
-cv6 <- cvFit(lm.fit5, data=school_type_rm, y=log(school_type_rm$result.max), K = 10, seed=1)
+cv6 <- cvFit(lm.fit5, data=train_rm_school_type, y=log(train_rm_school_type$result.max), K = 10, seed=1)
 residuals6 <- lm.fit5$residuals
-sprintf("rmse lm.fit5 log transforms %s", exp(cv6$cv))
-sprintf("rmse lm.fit5 log transforms %s", rmse.train.6)
+# sprintf("rmse lm.fit5 log transforms %s", exp(cv6$cv))
+# sprintf("rmse lm.fit5 log transforms %s", rmse.train.6)
+(summary(lm.fit5))
+
+# doing the fit for fm6 (lm.fit5) on test data
+test_rm_school_type <- subset(test, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, action_level_exceedance, ale_follow_up_action, ale_follow_up_status))
+
+test_rm_school_type$homeless <- test_rm_school_type$homeless + .5
+test_rm_school_type$foster <- test_rm_school_type$foster + .5
+test_rm_school_type$migrantprogram <- test_rm_school_type$migrantprogram + .5
+test_rm_school_type$english_learner <- test_rm_school_type$english_learner + .5
+
+lm.fit6 <- lm(log(test_rm_school_type$result.max) ~ log(test_rm_school_type$foster) + log(test_rm_school_type$homeless) +log(test_rm_school_type$migrantprogram) + log(test_rm_school_type$english_learner), data=test_rm_school_type)
+(summary(lm.fit6))
 
 ```
 
@@ -356,7 +374,7 @@ Plot cv RMSE as a function of k:
 k = c(2:20)
 cvk = rep(0, 19)
 for (i in 1:19){
-  cvk[i]=exp(cvFit(lm.fit5, data=school_type_rm, y=log(school_type_rm$result.max), K = k[i], seed=1)$cv)}
+  cvk[i]=exp(cvFit(lm.fit5, data=train_rm_school_type, y=log(train_rm_school_type$result.max), K = k[i], seed=1)$cv)}
 
 plot(x=k, y=cvk)
 
@@ -390,11 +408,11 @@ writeLines(text = all, file("regression_predict.html"))
 
 Then, we develop a classification model using logistic regression:
 ```{r}
-school_type_rm <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, result.max, ale_follow_up_action, ale_follow_up_status))
+train_rm_school_type <- subset(train, select = -c(school_type.y, calpads_fall_1_certification_status, school_name, county_name, district_name, water_system_name, sample_date, result.max, ale_follow_up_action, ale_follow_up_status))
 
-x <- model.matrix(action_level_exceedance ~ .,school_type_rm)[,-1]
-y <- school_type_rm$action_level_exceedance
-logistic.mod <- glm(y~x, data= school_type_rm, family = binomial())
+x <- model.matrix(action_level_exceedance ~ .,train_rm_school_type)[,-1]
+y <- train_rm_school_type$action_level_exceedance
+logistic.mod <- glm(y~x, data= train_rm_school_type, family = binomial())
 summary(logistic.mod)
 
 
