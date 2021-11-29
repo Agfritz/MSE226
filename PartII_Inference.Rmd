@@ -194,6 +194,7 @@ sprintf("training cv rmse: prediction model %s", exp(cv6$cv))
 ```
 
 ```{r}
+fm6 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=test)
 summary(fm6)
 ```
 
