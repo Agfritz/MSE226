@@ -171,7 +171,11 @@ test = combined_data_clean_grouped_rmna[-in.train, ]
 
 Run the remainder of the models:
 ```{r}
-set.seed(1)
+
+train$homeless <- train$homeless + .5
+train$foster <- train$foster + .5
+train$migrantprogram <- train$migrantprogram + .5
+train$english_learner <- train$english_learner + .5
 
 test$homeless <- test$homeless + .5
 test$foster <- test$foster + .5
@@ -179,12 +183,14 @@ test$migrantprogram <- test$migrantprogram + .5
 test$english_learner <- test$english_learner + .5
 
 fm6 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=test)
-rmse.test.6 = sqrt(mean((exp(fm6$residuals))^2))
-sprintf("test rmse: prediction model %s", rmse.test.6)
+fm6 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=train)
+#rmse.test.6 = sqrt(mean((exp(fm6$residuals))^2))
+#sprintf("test rmse: prediction model %s", rmse.test.6)
 
 ```
 
 ```{r}
+set.seed(1)
 summary(fm6)
 ```
 
@@ -193,6 +199,51 @@ Generate regression tables:
 ```{r}
 all <- stargazer(fm6, title="Selected Prediction Model", align=TRUE, dep.var.labels=c("Maximum Lead (ug/L)"), no.space=TRUE, type = "html")
 writeLines(text = all, file("regression_predict.html"))
+```
+Do the bootstrap method:
+```{r}
+library(boot)
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm7 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm7$coeff[1])
+}
+boot.out <- boot(train, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm8 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm8$coeff[2])
+}
+boot.out <- boot(train, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm9 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm9$coeff[3])
+}
+boot.out <- boot(train, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm10 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm10$coeff[4])
+}
+boot.out <- boot(train, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm11 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm11$coeff[5])
+}
+boot.out <- boot(train, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+
+
 ```
 
 #fm6 is the best model.
