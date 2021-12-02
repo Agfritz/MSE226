@@ -83,9 +83,6 @@ combined_data_clean <- combined_data_clean[!(combined_data_clean$ale_follow_up_a
 #remove charter schools with funding type na
 combined_data_clean <- combined_data_clean[!(combined_data_clean$"charter_school" == "Yes" & combined_data_clean$charter_funding_type == "N/A"),]
 
-#remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
-combined_data_clean %>% drop_na("total_enrollment", "free_reducedmealprogram", "homeless", "migrantprogram", "direct_certification", "unduplicatedfrpm_eligible_count", "english_learner" , "result", "action_level_exceedance", "school_type.y")
-
 #combine multiple samples by taking max samples when multiple samples taken at a school
 combined_data_clean_grouped <- combined_data_clean %>% 
   group_by(school_name, county_name) %>% 
@@ -99,7 +96,7 @@ combined_data_clean_grouped$action_level_exceedance <- ifelse(combined_data_clea
 
 #remove data with NAs in the columns: total enrollment, frmp, homeless, migrant, direct certification, undup, el, results, action level exceedence, school_type
 combined_data_clean_grouped = combined_data_clean_grouped[,!(names(combined_data_clean_grouped) =='result')]
-combined_data_clean_grouped_rmna <- combined_data_clean_grouped %>% 
+combined_data_clean_grouped_rmna = combined_data_clean_grouped %>% 
  drop_na(total_enrollment)  %>%
  drop_na(homeless)  %>%
  drop_na(migrantprogram)  %>%
@@ -190,14 +187,19 @@ cv6 <- cvFit(fm6, data=train.regression, y=log(train.regression$result.max), K =
 
 sprintf("training cv rmse: prediction model %s", exp(cv6$cv))
 
-
-```
-
-```{r}
-fm6 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=test)
 summary(fm6)
 ```
 
+We fit the test data to the model:
+```{r}
+test$homeless <- test$homeless + .5
+test$foster <- test$foster + .5
+test$migrantprogram <- test$migrantprogram + .5
+test$english_learner <- test$english_learner + .5
+
+fm6 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=test)
+summary(fm6)
+```
 
 We calculate the test error:
 
@@ -206,8 +208,8 @@ test$homeless <- test$homeless + .5
 test$foster <- test$foster + .5
 test$migrantprogram <- test$migrantprogram + .5
 test$english_learner <- test$english_learner + .5
-rmse.test.fm6 <- sqrt(mean((exp(test$result.max) - predict(fm6, test))^2))
-sprintf("test rmse: prediction model %s", rmse.test.6)
+rmse.test.fm6 <- sqrt(mean((test$result.max - predict(fm6, test))^2))
+sprintf("test rmse: prediction model %s", (rmse.test.fm6))
 ```
 
 
@@ -217,6 +219,45 @@ all <- stargazer(fm6, lm.fit, title="Selected Prediction Model", align=TRUE, dep
 writeLines(text = all, file("regression_predict.html"))
 ```
 
+Do the bootstrap method:
+```{r}
+library(boot)
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm7 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm7$coeff[1])
+}
+boot.out <- boot(train.regression, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm8 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm8$coeff[2])
+}
+boot.out <- boot(train.regression, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm9 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm9$coeff[3])
+}
+boot.out <- boot(train.regression, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm10 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm10$coeff[4])
+}
+boot.out <- boot(train.regression, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+coefficient.boot <- function(data, indices) {
+  d <- data[indices,]
+  fm11 <- lm(log(result.max) ~ log(foster) + log(homeless) +log(migrantprogram) + log(english_learner), data=d)
+  return(fm11$coeff[5])
+}
+boot.out <- boot(train.regression, coefficient.boot, 10000)
+(boot.ci(boot.out, conf = .95, type = "perc"))
+```
 
 Best classification model:
 ```{r}
